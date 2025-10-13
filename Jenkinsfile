@@ -31,38 +31,42 @@ pipeline {
       }
     }
 
-    stage('deploy') {
+stage('deploy'){
   agent {
     docker {
-      image 'bitnami/kubectl:latest'        // or a fully pinned tag
-      args  '-v /var/jenkins_home/.kube:/root/.kube:ro'
+      image 'dtzar/helm-kubectl:3.16.2'     // has kubectl + sh + cat (multi-arch)
+      args  '-v /var/jenkins_home/.kube:/root/.kube:ro --network kind'
       reuseNode true
     }
   }
-      steps {
-        sh '''
-          kubectl create ns ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  environment {
+    KUBECONFIG = '/root/.kube/config'
+  }
+  steps {
+    sh '''
+      kubectl create ns ${NAMESPACE} --dry-run=client -o yaml | kubectl apply --validate=false -f -
 
-          cat <<EOF | kubectl apply -n ${NAMESPACE} -f -
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata: { name: ${DEPLOYMENT} }
+      cat <<EOF | kubectl apply -n ${NAMESPACE} -f -
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata: { name: ${DEPLOYMENT} }
+      spec:
+        replicas: 1
+        selector: { matchLabels: { app: ${DEPLOYMENT} } }
+        template:
+          metadata: { labels: { app: ${DEPLOYMENT} } }
           spec:
-            replicas: 1
-            selector: { matchLabels: { app: ${DEPLOYMENT} } }
-            template:
-              metadata: { labels: { app: ${DEPLOYMENT} } }
-              spec:
-                containers:
-                  - name: ${DEPLOYMENT}
-                    image: ${REGISTRY}/${IMAGE}:${COMMIT}
-                    ports: [{ containerPort: 8080 }]
-          EOF
+            containers:
+              - name: ${DEPLOYMENT}
+                image: ${REGISTRY}/${IMAGE}:${COMMIT}
+                ports: [{ containerPort: 8080 }]
+      EOF
 
-          kubectl -n ${NAMESPACE} rollout status deploy/${DEPLOYMENT} --timeout=120s
-        '''
-      }
-    }
+      kubectl -n ${NAMESPACE} rollout status deploy/${DEPLOYMENT} --timeout=120s
+    '''
+  }
+}
+
   }
 
   post {
