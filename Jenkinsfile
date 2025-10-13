@@ -1,52 +1,76 @@
 pipeline {
   agent any
-  environment {
-    REGISTRY = "localhost:5001"
-    IMAGE = "dora-spring"
-    COMMIT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-    KUBECONFIG = "${env.WORKSPACE}/.kube/config"
-  }
-  stages {
-    stage('checkout'){ steps { checkout scm } }
 
-    stage('build & test'){
+  environment {
+    REGISTRY    = "localhost:5001"
+    IMAGE       = "payment-service"
+    COMMIT      = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+    NAMESPACE   = "demo"
+    DEPLOYMENT  = "payment-service"
+  }
+
+  stages {
+    stage('checkout') {
+      steps { checkout scm }
+    }
+
+    stage('build & test') {
       steps { sh 'mvn -B -DskipTests=false clean verify' }
     }
 
-    stage('docker build & push'){
-      agent { docker { image 'docker:27.3.1-cli' args '-v /var/run/docker.sock:/var/run/docker.sock' } }
+    stage('docker build & push') {
+      agent {
+        docker {
+          image 'docker:27.3.1-cli'                  // <— REQUIRED on its own line
+          args  '-v /var/run/docker.sock:/var/run/docker.sock'
+          reuseNode true
+        }
+      }
       steps {
         sh '''
+          docker version
           docker build -t ${REGISTRY}/${IMAGE}:${COMMIT} .
           docker push  ${REGISTRY}/${IMAGE}:${COMMIT}
         '''
       }
     }
 
-    stage('deploy'){
-      agent { docker { image 'bitnami/kubectl:latest'
-                       args '--network kind -v /var/jenkins_home/.kube:/root/.kube:ro' } }
+    stage('deploy') {                                // DevLake will detect this as a deployment
+      agent {
+        docker {
+          image 'bitnami/kubectl:1.30'               // pin a kubectl image
+          args  '--network kind -v /var/jenkins_home/.kube:/root/.kube:ro'
+          reuseNode true
+        }
+      }
       steps {
         sh '''
-          kubectl create ns demo --dry-run=client -o yaml | kubectl apply -f -
-          cat <<EOF | kubectl apply -n demo -f -
+          kubectl create ns ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+
+          cat <<EOF | kubectl apply -n ${NAMESPACE} -f -
           apiVersion: apps/v1
           kind: Deployment
-          metadata: { name: app }
+          metadata: { name: ${DEPLOYMENT} }
           spec:
             replicas: 1
-            selector: { matchLabels: { app: app } }
+            selector: { matchLabels: { app: ${DEPLOYMENT} } }
             template:
-              metadata: { labels: { app: app } }
+              metadata: { labels: { app: ${DEPLOYMENT} } }
               spec:
                 containers:
-                  - name: app
+                  - name: ${DEPLOYMENT}
                     image: ${REGISTRY}/${IMAGE}:${COMMIT}
-                    ports: [{containerPort: 8080}]
+                    ports: [{ containerPort: 8080 }]
           EOF
-          kubectl -n demo rollout status deploy/app --timeout=120s
+
+          kubectl -n ${NAMESPACE} rollout status deploy/${DEPLOYMENT} --timeout=120s
         '''
       }
     }
+  }
+
+  post {
+    failure { echo "pipeline failed" }
+    success { echo "pipeline succeeded" }
   }
 }
