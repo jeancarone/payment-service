@@ -1,5 +1,11 @@
 pipeline {
   agent any
+  environment {
+    REGISTRY = "localhost:5001"
+    IMAGE = "dora-spring"
+    COMMIT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+    KUBECONFIG = "${env.WORKSPACE}/.kube/config"
+  }
   stages {
     stage('checkout'){ steps { checkout scm } }
 
