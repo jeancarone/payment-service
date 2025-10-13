@@ -34,7 +34,7 @@ pipeline {
     stage('deploy') {
   agent {
     docker {
-      image 'lachlanevenson/k8s-kubectl:v1.30.0'        // or a fully pinned tag
+      image 'bitnami/kubectl:latest'        // or a fully pinned tag
       args  '-v /var/jenkins_home/.kube:/root/.kube:ro'
       reuseNode true
     }
