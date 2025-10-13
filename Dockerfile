@@ -1,7 +1,6 @@
-# minimal runtime for a Java app
-FROM eclipse-temurin:17-jre-alpine
+# minimal runtime for a Java app (multi-arch incl. arm64)
+FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
-# copy the jar produced by mvn verify
 COPY target/*.jar app.jar
 EXPOSE 8080
 ENTRYPOINT ["java","-jar","/app/app.jar"]
