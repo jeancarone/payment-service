@@ -10,10 +10,6 @@ pipeline {
   }
 
   stages {
-    stage('checkout') {
-      steps { checkout scm }
-    }
-
     stage('build & test') {
       steps { sh 'mvn -B -DskipTests=false clean verify' }
     }
