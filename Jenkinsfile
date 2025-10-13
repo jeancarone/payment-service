@@ -31,14 +31,7 @@ pipeline {
       }
     }
 
-    stage('deploy') {                                // DevLake will detect this as a deployment
-      agent {
-        docker {
-          image 'bitnami/kubectl:1.30'               // pin a kubectl image
-          args  '--network kind -v /var/jenkins_home/.kube:/root/.kube:ro'
-          reuseNode true
-        }
-      }
+    stage('deploy') {
       steps {
         sh '''
           kubectl create ns ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
