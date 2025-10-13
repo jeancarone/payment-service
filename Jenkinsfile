@@ -34,7 +34,7 @@ pipeline {
     stage('deploy') {
   agent {
     docker {
-      image 'ghcr.io/bitnami/kubectl:1.30.4'    // has cat/sh
+      image 'lachlanevenson/k8s-kubectl:v1.30.4'
       args  '-v /var/jenkins_home/.kube:/root/.kube:ro'
       reuseNode true
     }
