@@ -32,6 +32,13 @@ pipeline {
     }
 
     stage('deploy') {
+agent {
+  docker {
+    image 'rancher/kubectl:v1.30.4'
+    args  '-v /var/jenkins_home/.kube:/root/.kube:ro'
+    reuseNode true
+  }
+}
       steps {
         sh '''
           kubectl create ns ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
