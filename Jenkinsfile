@@ -1,11 +1,5 @@
 pipeline {
   agent any
-  environment {
-    REGISTRY = "localhost:5001"
-    IMAGE = "dora-spring"
-    COMMIT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-    KUBECONFIG = "${env.WORKSPACE}/.kube/config"
-  }
   stages {
     stage('checkout'){ steps { checkout scm } }
 
@@ -14,6 +8,7 @@ pipeline {
     }
 
     stage('docker build & push'){
+      agent { docker { image 'docker:27.3.1-cli' args '-v /var/run/docker.sock:/var/run/docker.sock' } }
       steps {
         sh '''
           docker build -t ${REGISTRY}/${IMAGE}:${COMMIT} .
@@ -22,10 +17,11 @@ pipeline {
       }
     }
 
-    stage('deploy'){  // <— DevLake will treat jobs matching /deploy/ as deployments
+    stage('deploy'){
+      agent { docker { image 'bitnami/kubectl:latest'
+                       args '--network kind -v /var/jenkins_home/.kube:/root/.kube:ro' } }
       steps {
         sh '''
-          # simple K8s rollout (Deployment named app in namespace demo)
           kubectl create ns demo --dry-run=client -o yaml | kubectl apply -f -
           cat <<EOF | kubectl apply -n demo -f -
           apiVersion: apps/v1
@@ -46,9 +42,5 @@ pipeline {
         '''
       }
     }
-  }
-  post {
-    failure { echo "pipeline failed" }
-    success { echo "pipeline succeeded" }
   }
 }
