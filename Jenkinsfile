@@ -34,7 +34,7 @@ pipeline {
 stage('deploy'){
   agent {
     docker {
-      image 'dtzar/helm-kubectl:3.16.2'     // has kubectl + sh + cat (multi-arch)
+      image 'dtzar/helm-kubectl:3.16.2'
       args  '-v /var/jenkins_home/.kube:/root/.kube:ro --network kind'
       reuseNode true
     }
@@ -44,6 +44,8 @@ stage('deploy'){
   }
   steps {
     sh '''
+      kubectl version --client
+      kubectl cluster-info   # should show kind-control-plane:6443
       kubectl create ns ${NAMESPACE} --dry-run=client -o yaml | kubectl apply --validate=false -f -
 
       cat <<EOF | kubectl apply -n ${NAMESPACE} -f -
@@ -66,6 +68,7 @@ stage('deploy'){
     '''
   }
 }
+
 
   }
 
