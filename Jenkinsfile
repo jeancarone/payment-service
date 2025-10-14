@@ -34,7 +34,7 @@ pipeline {
 stage('deploy'){
   agent {
     docker {
-      image 'dtzar/helm-kubectl:3.16.2'
+      image 'dtzar/helm-kubectl:3.16.2'  // has kubectl + sh + cat
       args  '-v /var/jenkins_home/.kube:/root/.kube:ro --network kind'
       reuseNode true
     }
@@ -44,11 +44,24 @@ stage('deploy'){
   }
   steps {
     sh '''
-      kubectl version --client
-      kubectl cluster-info   # should show kind-control-plane:6443
-      kubectl create ns ${NAMESPACE} --dry-run=client -o yaml | kubectl apply --validate=false -f -
+      set -euo pipefail
 
-      cat <<EOF | kubectl apply -n ${NAMESPACE} -f -
+      echo "KUBECONFIG=$KUBECONFIG"
+      [ -f "$KUBECONFIG" ] || { echo "ERROR: $KUBECONFIG not found"; exit 2; }
+
+      echo -n "API server in kubeconfig: "
+      kubectl --kubeconfig="$KUBECONFIG" config view --minify -o jsonpath='{.clusters[0].cluster.server}'
+      echo
+
+      # sanity
+      kubectl --kubeconfig="$KUBECONFIG" version --client
+      kubectl --kubeconfig="$KUBECONFIG" cluster-info
+
+      # your original steps
+      kubectl --kubeconfig="$KUBECONFIG" create ns ${NAMESPACE} --dry-run=client -o yaml | \
+      kubectl --kubeconfig="$KUBECONFIG" apply --validate=false -f -
+
+      cat <<EOF | kubectl --kubeconfig="$KUBECONFIG" apply -n ${NAMESPACE} -f -
       apiVersion: apps/v1
       kind: Deployment
       metadata: { name: ${DEPLOYMENT} }
@@ -64,10 +77,11 @@ stage('deploy'){
                 ports: [{ containerPort: 8080 }]
       EOF
 
-      kubectl -n ${NAMESPACE} rollout status deploy/${DEPLOYMENT} --timeout=120s
+      kubectl --kubeconfig="$KUBECONFIG" -n ${NAMESPACE} rollout status deploy/${DEPLOYMENT} --timeout=120s
     '''
   }
 }
+
 
 
   }
